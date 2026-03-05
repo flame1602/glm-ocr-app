@@ -44,32 +44,28 @@ def login_required(f):
 
 
 # === OCR via MaaS API ===
-def pdf_to_images(pdf_path):
-    """Convert PDF pages to PNG images."""
+def get_pdf_page_count(pdf_path):
+    """Get the number of pages in a PDF."""
     doc = fitz.open(pdf_path)
-    imgs = []
-    td = f"/tmp/pdf_pages/{Path(pdf_path).stem}"
-    os.makedirs(td, exist_ok=True)
-    zoom = config.DPI / 72
-    for i in range(len(doc)):
-        pix = doc[i].get_pixmap(matrix=fitz.Matrix(zoom, zoom))
-        p = os.path.join(td, f"p_{i+1:04d}.png")
-        pix.save(p)
-        imgs.append(p)
+    count = len(doc)
     doc.close()
-    return imgs
+    return count
 
 
-def ocr_page_maas(img_path):
-    """OCR a single page image via Zhipu MaaS API."""
+def ocr_pdf_maas(pdf_path):
+    """OCR an entire PDF via Zhipu MaaS API (direct file upload)."""
     from openai import OpenAI
     client = OpenAI(api_key=config.ZHIPU_API_KEY, base_url=config.ZHIPU_API_BASE)
-    with open(img_path, "rb") as f:
-        b64 = base64.b64encode(f.read()).decode()
+
+    # Upload file to Zhipu
+    with open(pdf_path, "rb") as f:
+        file_obj = client.files.create(file=f, purpose="file-extract")
+
+    # OCR via chat completion referencing uploaded file
     resp = client.chat.completions.create(
         model=config.OCR_MODEL,
         messages=[{"role": "user", "content": [
-            {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{b64}"}},
+            {"type": "file", "file_url": {"url": file_obj.id}},
             {"type": "text", "text": "Text Recognition:"}
         ]}],
         max_tokens=8192, temperature=0.01
@@ -78,37 +74,25 @@ def ocr_page_maas(img_path):
 
 
 def ocr_single_file(pdf_path, source="upload"):
-    """Process a single PDF file: convert → OCR → save markdown. Returns output path."""
+    """Process a single PDF file: upload to API → OCR → save markdown. Returns output path."""
     pdf_name = Path(pdf_path).stem
     job_id = db.add_job(Path(pdf_path).name, source=source)
 
     try:
-        # Convert PDF to images
-        t0 = time.time()
-        imgs = pdf_to_images(pdf_path)
-        t_convert = time.time() - t0
+        pages = get_pdf_page_count(pdf_path)
+        with state_lock:
+            ocr_state["total_pages"] = pages
 
-        # OCR each page
-        t1 = time.time()
-        md_parts = []
-        for i, img in enumerate(imgs):
-            with state_lock:
-                ocr_state["current_page"] = i + 1
-            md_parts.append(ocr_page_maas(img))
-        t_ocr = time.time() - t1
+        t0 = time.time()
+        md_text = ocr_pdf_maas(pdf_path)
+        t_ocr = time.time() - t0
 
         # Save markdown
-        md_text = "\n\n---\n\n".join(md_parts)
         out_path = os.path.join(config.OUTPUT_DIR, f"{pdf_name}.md")
         with open(out_path, "w", encoding="utf-8") as f:
             f.write(f"<!-- OCR by GLM-OCR | {Path(pdf_path).name} -->\n\n{md_text}")
 
-        # Update DB
-        db.complete_job(job_id, len(imgs), t_convert, t_ocr, f"{pdf_name}.md")
-
-        # Cleanup temp images
-        shutil.rmtree(f"/tmp/pdf_pages/{pdf_name}", ignore_errors=True)
-
+        db.complete_job(job_id, pages, 0, t_ocr, f"{pdf_name}.md")
         return out_path
 
     except Exception as e:
@@ -133,39 +117,34 @@ def ocr_worker(pdfs):
             ocr_state["total_pages"] = 0
 
         try:
-            t0 = time.time()
-            imgs = pdf_to_images(pdf)
-            t_convert = time.time() - t0
+            pages = get_pdf_page_count(pdf)
             with state_lock:
-                ocr_state["total_pages"] = len(imgs)
+                ocr_state["total_pages"] = pages
+                ocr_state["current_page"] = 1
 
-            t1 = time.time()
-            md_parts = []
-            for i, img in enumerate(imgs):
-                with state_lock:
-                    ocr_state["current_page"] = i + 1
-                md_parts.append(ocr_page_maas(img))
-            t_ocr = time.time() - t1
+            t0 = time.time()
+            md_text = ocr_pdf_maas(pdf)
+            t_ocr = time.time() - t0
+
+            with state_lock:
+                ocr_state["current_page"] = pages
 
             pdf_name = Path(pdf).stem
-            md_text = "\n\n---\n\n".join(md_parts)
             out_path = os.path.join(config.OUTPUT_DIR, f"{pdf_name}.md")
             with open(out_path, "w", encoding="utf-8") as f:
                 f.write(f"<!-- OCR by GLM-OCR | {Path(pdf).name} -->\n\n{md_text}")
 
             job_id = db.add_job(Path(pdf).name, source="upload")
-            db.complete_job(job_id, len(imgs), t_convert, t_ocr, f"{pdf_name}.md")
+            db.complete_job(job_id, pages, 0, t_ocr, f"{pdf_name}.md")
 
             with state_lock:
                 ocr_state["files_done"] = idx + 1
                 ocr_state["results"].append({
-                    "file": Path(pdf).name, "pages": len(imgs), "output": f"{pdf_name}.md",
+                    "file": Path(pdf).name, "pages": pages, "output": f"{pdf_name}.md",
                     "status": "ok", "time_ocr": round(t_ocr, 2),
-                    "time_convert": round(t_convert, 2),
-                    "avg_per_page": round(t_ocr / max(len(imgs), 1), 2)
+                    "time_convert": 0,
+                    "avg_per_page": round(t_ocr / max(pages, 1), 2)
                 })
-
-            shutil.rmtree(f"/tmp/pdf_pages/{pdf_name}", ignore_errors=True)
 
         except Exception as e:
             traceback.print_exc()
