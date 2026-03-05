@@ -65,20 +65,12 @@ def _make_zhipu_token(api_key):
                         headers={"alg": "HS256", "sign_type": "SIGN"})
 
 
-def ocr_pdf_maas(pdf_path):
-    """OCR an entire PDF via Zhipu layout_parsing API with JWT auth."""
+def ocr_page_maas(img_bytes, page_num, token):
+    """OCR a single page image via Zhipu layout_parsing API."""
     import requests as req
 
-    # Read and encode PDF as base64 data URI
-    with open(pdf_path, "rb") as f:
-        b64 = base64.b64encode(f.read()).decode()
-
-    ext = Path(pdf_path).suffix.lower()
-    mime = "application/pdf" if ext == ".pdf" else f"image/{ext.lstrip('.')}"
-    data_uri = f"data:{mime};base64,{b64}"
-
-    token = _make_zhipu_token(config.ZHIPU_API_KEY)
-    print(f"[OCR] Processing {Path(pdf_path).name} via layout_parsing", flush=True)
+    b64 = base64.b64encode(img_bytes).decode()
+    data_uri = f"data:image/png;base64,{b64}"
 
     resp = req.post(
         f"{config.ZHIPU_API_BASE}/layout_parsing",
@@ -91,17 +83,33 @@ def ocr_pdf_maas(pdf_path):
     )
 
     if resp.status_code != 200:
-        print(f"[OCR ERROR] {resp.status_code}: {resp.text[:1000]}", flush=True)
+        print(f"[OCR ERROR] Page {page_num}: {resp.status_code}: {resp.text[:500]}", flush=True)
         resp.raise_for_status()
 
     result = resp.json()
-    print(f"[OCR] Success, keys: {list(result.keys())}", flush=True)
-
-    # Extract content
     data = result.get("data", result)
     if isinstance(data, dict):
         return data.get("content", data.get("markdown", str(data)))
     return str(result)
+
+
+def ocr_pdf_maas(pdf_path):
+    """OCR a PDF by converting pages to PNG and sending each to layout_parsing."""
+    token = _make_zhipu_token(config.ZHIPU_API_KEY)
+    doc = fitz.open(pdf_path)
+    pages = len(doc)
+    print(f"[OCR] Processing {Path(pdf_path).name} ({pages} pages)", flush=True)
+
+    zoom = config.DPI / 72
+    md_parts = []
+    for i in range(pages):
+        pix = doc[i].get_pixmap(matrix=fitz.Matrix(zoom, zoom))
+        img_bytes = pix.tobytes("png")
+        print(f"[OCR] Page {i+1}/{pages}...", flush=True)
+        md_parts.append(ocr_page_maas(img_bytes, i+1, token))
+
+    doc.close()
+    return "\n\n---\n\n".join(md_parts)
 
 
 def ocr_single_file(pdf_path, source="upload"):
