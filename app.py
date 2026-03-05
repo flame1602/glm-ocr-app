@@ -53,24 +53,39 @@ def get_pdf_page_count(pdf_path):
 
 
 def ocr_pdf_maas(pdf_path):
-    """OCR an entire PDF via Zhipu MaaS API (direct file upload)."""
-    from openai import OpenAI
-    client = OpenAI(api_key=config.ZHIPU_API_KEY, base_url=config.ZHIPU_API_BASE)
+    """OCR an entire PDF via Zhipu layout_parsing API."""
+    import requests as req
 
-    # Upload file to Zhipu
+    # Read and encode PDF as base64 data URI
     with open(pdf_path, "rb") as f:
-        file_obj = client.files.create(file=f, purpose="file-extract")
+        b64 = base64.b64encode(f.read()).decode()
 
-    # OCR via chat completion referencing uploaded file
-    resp = client.chat.completions.create(
-        model=config.OCR_MODEL,
-        messages=[{"role": "user", "content": [
-            {"type": "file", "file_url": {"url": file_obj.id}},
-            {"type": "text", "text": "Text Recognition:"}
-        ]}],
-        max_tokens=8192, temperature=0.01
+    ext = Path(pdf_path).suffix.lower()
+    mime = "application/pdf" if ext == ".pdf" else f"image/{ext.lstrip('.')}"
+    data_uri = f"data:{mime};base64,{b64}"
+
+    # Call layout_parsing API
+    resp = req.post(
+        f"{config.ZHIPU_API_BASE}/layout_parsing",
+        headers={
+            "Authorization": f"Bearer {config.ZHIPU_API_KEY}",
+            "Content-Type": "application/json"
+        },
+        json={"model": config.OCR_MODEL, "file": data_uri},
+        timeout=300
     )
-    return resp.choices[0].message.content
+    resp.raise_for_status()
+    result = resp.json()
+
+    # Extract markdown content from response
+    if "data" in result and "content" in result["data"]:
+        return result["data"]["content"]
+    elif "data" in result and "markdown" in result["data"]:
+        return result["data"]["markdown"]
+    elif "choices" in result:
+        return result["choices"][0]["message"]["content"]
+    else:
+        return str(result)
 
 
 def ocr_single_file(pdf_path, source="upload"):
