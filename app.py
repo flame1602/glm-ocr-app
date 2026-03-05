@@ -52,11 +52,22 @@ def get_pdf_page_count(pdf_path):
     return count
 
 
-def ocr_pdf_maas(pdf_path):
-    """OCR an entire PDF via Zhipu layout_parsing API using official SDK."""
-    from zhipuai import ZhipuAI
+def _make_zhipu_token(api_key):
+    """Generate JWT token for Zhipu API authentication."""
+    import jwt as pyjwt
+    parts = api_key.split(".")
+    if len(parts) != 2:
+        raise ValueError("ZHIPU_API_KEY must be in format 'id.secret'")
+    key_id, secret = parts
+    now = int(time.time())
+    payload = {"api_key": key_id, "exp": now + 3600, "timestamp": now}
+    return pyjwt.encode(payload, secret, algorithm="HS256",
+                        headers={"alg": "HS256", "sign_type": "SIGN"})
 
-    client = ZhipuAI(api_key=config.ZHIPU_API_KEY)
+
+def ocr_pdf_maas(pdf_path):
+    """OCR an entire PDF via Zhipu layout_parsing API with JWT auth."""
+    import requests as req
 
     # Read and encode PDF as base64 data URI
     with open(pdf_path, "rb") as f:
@@ -66,22 +77,31 @@ def ocr_pdf_maas(pdf_path):
     mime = "application/pdf" if ext == ".pdf" else f"image/{ext.lstrip('.')}"
     data_uri = f"data:{mime};base64,{b64}"
 
+    token = _make_zhipu_token(config.ZHIPU_API_KEY)
     print(f"[OCR] Processing {Path(pdf_path).name} via layout_parsing", flush=True)
 
-    result = client.layout_parsing.create(
-        model=config.OCR_MODEL,
-        file=data_uri
+    resp = req.post(
+        f"{config.ZHIPU_API_BASE}/layout_parsing",
+        headers={
+            "Authorization": f"Bearer {token}",
+            "Content-Type": "application/json"
+        },
+        json={"model": config.OCR_MODEL, "file": data_uri},
+        timeout=300
     )
 
-    # Extract content from response
-    if hasattr(result, 'data') and hasattr(result.data, 'content'):
-        return result.data.content
-    elif hasattr(result, 'data') and hasattr(result.data, 'markdown'):
-        return result.data.markdown
-    else:
-        content = str(result)
-        print(f"[OCR] Response: {content[:500]}", flush=True)
-        return content
+    if resp.status_code != 200:
+        print(f"[OCR ERROR] {resp.status_code}: {resp.text[:1000]}", flush=True)
+        resp.raise_for_status()
+
+    result = resp.json()
+    print(f"[OCR] Success, keys: {list(result.keys())}", flush=True)
+
+    # Extract content
+    data = result.get("data", result)
+    if isinstance(data, dict):
+        return data.get("content", data.get("markdown", str(data)))
+    return str(result)
 
 
 def ocr_single_file(pdf_path, source="upload"):
