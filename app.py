@@ -53,8 +53,10 @@ def get_pdf_page_count(pdf_path):
 
 
 def ocr_pdf_maas(pdf_path):
-    """OCR an entire PDF via Zhipu layout_parsing API."""
-    import requests as req
+    """OCR an entire PDF via Zhipu layout_parsing API using official SDK."""
+    from zhipuai import ZhipuAI
+
+    client = ZhipuAI(api_key=config.ZHIPU_API_KEY)
 
     # Read and encode PDF as base64 data URI
     with open(pdf_path, "rb") as f:
@@ -64,39 +66,22 @@ def ocr_pdf_maas(pdf_path):
     mime = "application/pdf" if ext == ".pdf" else f"image/{ext.lstrip('.')}"
     data_uri = f"data:{mime};base64,{b64}"
 
-    api_url = f"{config.ZHIPU_API_BASE}/layout_parsing"
-    print(f"[OCR] Calling {api_url} for {Path(pdf_path).name} ({len(b64)} chars base64)")
+    print(f"[OCR] Processing {Path(pdf_path).name} via layout_parsing", flush=True)
 
-    # Call layout_parsing API
-    resp = req.post(
-        api_url,
-        headers={
-            "Authorization": f"Bearer {config.ZHIPU_API_KEY}",
-            "Content-Type": "application/json"
-        },
-        json={"model": config.OCR_MODEL, "file": data_uri},
-        timeout=300
+    result = client.layout_parsing.create(
+        model=config.OCR_MODEL,
+        file=data_uri
     )
 
-    # Log error details before raising
-    if resp.status_code != 200:
-        print(f"[OCR ERROR] Status: {resp.status_code}")
-        print(f"[OCR ERROR] Response: {resp.text[:2000]}")
-        resp.raise_for_status()
-
-    result = resp.json()
-    print(f"[OCR] Response keys: {list(result.keys())}")
-
-    # Extract markdown content from response
-    if "data" in result and "content" in result["data"]:
-        return result["data"]["content"]
-    elif "data" in result and "markdown" in result["data"]:
-        return result["data"]["markdown"]
-    elif "choices" in result:
-        return result["choices"][0]["message"]["content"]
+    # Extract content from response
+    if hasattr(result, 'data') and hasattr(result.data, 'content'):
+        return result.data.content
+    elif hasattr(result, 'data') and hasattr(result.data, 'markdown'):
+        return result.data.markdown
     else:
-        print(f"[OCR] Unexpected response format: {str(result)[:500]}")
-        return str(result)
+        content = str(result)
+        print(f"[OCR] Response: {content[:500]}", flush=True)
+        return content
 
 
 def ocr_single_file(pdf_path, source="upload"):
