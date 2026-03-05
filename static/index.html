@@ -1,0 +1,1416 @@
+<!DOCTYPE html>
+<html lang="vi">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GLM-OCR — Hệ thống OCR dữ liệu</title>
+    <meta name="description" content="Hệ thống OCR PDF to Markdown chính của công ty, sử dụng GLM-OCR AI model">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg: #0a0e17;
+            --bg2: #111827;
+            --card: rgba(17, 24, 39, 0.7);
+            --card2: rgba(17, 24, 39, 0.9);
+            --border: rgba(255, 255, 255, 0.07);
+            --border2: rgba(255, 255, 255, 0.12);
+            --text: #e5e7eb;
+            --text2: #9ca3af;
+            --text3: #6b7280;
+            --accent: #6366f1;
+            --accent2: #818cf8;
+            --accent3: #a5b4fc;
+            --glow: rgba(99, 102, 241, 0.25);
+            --ok: #10b981;
+            --ok-glow: rgba(16, 185, 129, 0.25);
+            --warn: #f59e0b;
+            --err: #ef4444;
+            --blue: #3b82f6;
+            --radius: 14px;
+            --radius-sm: 10px;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', system-ui, -apple-system, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            min-height: 100vh;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        body::before {
+            content: '';
+            position: fixed;
+            inset: 0;
+            background:
+                radial-gradient(ellipse at 20% 0%, rgba(99, 102, 241, 0.08), transparent 50%),
+                radial-gradient(ellipse at 80% 100%, rgba(16, 185, 129, 0.05), transparent 50%);
+            pointer-events: none;
+            z-index: 0;
+        }
+
+        /* === Layout === */
+        .app {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            position: relative;
+            z-index: 1;
+        }
+
+        /* === Header === */
+        .header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 18px 24px;
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: 18px;
+            backdrop-filter: blur(20px);
+            margin-bottom: 20px;
+        }
+
+        .header-left {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+        }
+
+        .header-logo {
+            width: 42px;
+            height: 42px;
+            background: linear-gradient(135deg, var(--accent), #4f46e5);
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 20px;
+            box-shadow: 0 4px 16px var(--glow);
+        }
+
+        .header h1 {
+            font-size: 20px;
+            font-weight: 700;
+            background: linear-gradient(135deg, var(--accent2), var(--accent), var(--ok));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .header .subtitle {
+            font-size: 11px;
+            color: var(--text3);
+            margin-top: 2px;
+        }
+
+        .header-right {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .api-badge {
+            padding: 5px 12px;
+            border-radius: 8px;
+            font-size: 11px;
+            border: 1px solid var(--border);
+            background: rgba(255, 255, 255, 0.03);
+            color: var(--text2);
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .api-dot {
+            width: 7px;
+            height: 7px;
+            border-radius: 50%;
+            background: var(--warn);
+        }
+
+        .api-dot.on {
+            background: var(--ok);
+            box-shadow: 0 0 8px var(--ok-glow);
+        }
+
+        .logout-btn {
+            padding: 6px 14px;
+            border-radius: 8px;
+            border: 1px solid var(--border);
+            background: rgba(255, 255, 255, 0.03);
+            color: var(--text2);
+            font-size: 11px;
+            cursor: pointer;
+            text-decoration: none;
+            transition: all .2s;
+        }
+
+        .logout-btn:hover {
+            background: rgba(255, 255, 255, 0.07);
+            color: var(--text);
+        }
+
+        /* === Tabs === */
+        .tabs {
+            display: flex;
+            gap: 4px;
+            padding: 4px;
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: 14px;
+            margin-bottom: 20px;
+            backdrop-filter: blur(20px);
+        }
+
+        .tab {
+            flex: 1;
+            padding: 10px 16px;
+            border-radius: var(--radius-sm);
+            border: none;
+            background: transparent;
+            color: var(--text2);
+            font-family: inherit;
+            font-size: 13px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all .3s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+        }
+
+        .tab:hover {
+            color: var(--text);
+            background: rgba(255, 255, 255, 0.04);
+        }
+
+        .tab.active {
+            background: linear-gradient(135deg, var(--accent), #4f46e5);
+            color: #fff;
+            box-shadow: 0 4px 16px var(--glow);
+        }
+
+        .tab-panel {
+            display: none;
+        }
+
+        .tab-panel.active {
+            display: block;
+            animation: fadeIn .3s;
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(8px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        /* === Cards === */
+        .card {
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            padding: 20px;
+            margin-bottom: 16px;
+            backdrop-filter: blur(20px);
+            transition: border-color .3s;
+        }
+
+        .card:hover {
+            border-color: var(--border2);
+        }
+
+        .card-title {
+            font-size: 14px;
+            font-weight: 600;
+            margin-bottom: 14px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .card-title .count {
+            font-weight: 400;
+            color: var(--text2);
+            font-size: 12px;
+        }
+
+        /* === Upload Zone === */
+        .upload-zone {
+            border: 2px dashed rgba(99, 102, 241, 0.25);
+            border-radius: 14px;
+            padding: 40px 20px;
+            text-align: center;
+            cursor: pointer;
+            transition: all .3s;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .upload-zone::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background: linear-gradient(135deg, rgba(99, 102, 241, 0.03), transparent);
+            opacity: 0;
+            transition: opacity .3s;
+        }
+
+        .upload-zone:hover,
+        .upload-zone.dragover {
+            border-color: var(--accent);
+            background: rgba(99, 102, 241, 0.04);
+            box-shadow: 0 0 40px rgba(99, 102, 241, 0.1);
+        }
+
+        .upload-zone:hover::before,
+        .upload-zone.dragover::before {
+            opacity: 1;
+        }
+
+        .upload-zone .icon {
+            font-size: 40px;
+            margin-bottom: 10px;
+            position: relative;
+            z-index: 1;
+        }
+
+        .upload-zone p {
+            color: var(--text2);
+            font-size: 13px;
+            position: relative;
+            z-index: 1;
+        }
+
+        .upload-zone p b {
+            color: var(--accent2);
+        }
+
+        .upload-zone input {
+            display: none;
+        }
+
+        /* === Grid === */
+        .grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 16px;
+        }
+
+        @media (max-width: 768px) {
+            .grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        /* === File List === */
+        .file-list {
+            max-height: 280px;
+            overflow-y: auto;
+        }
+
+        .file-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 10px 14px;
+            border-radius: var(--radius-sm);
+            margin-bottom: 4px;
+            background: rgba(255, 255, 255, 0.02);
+            border: 1px solid transparent;
+            font-size: 12px;
+            transition: all .2s;
+        }
+
+        .file-item:hover {
+            background: rgba(255, 255, 255, 0.05);
+            border-color: var(--border);
+        }
+
+        .file-name {
+            flex: 1;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .file-size {
+            color: var(--text3);
+            font-size: 11px;
+            margin-left: 8px;
+            flex-shrink: 0;
+        }
+
+        .file-actions {
+            display: flex;
+            gap: 4px;
+            margin-left: 8px;
+            flex-shrink: 0;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 24px;
+            color: var(--text3);
+            font-size: 12px;
+        }
+
+        /* === Buttons === */
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            padding: 8px 16px;
+            border-radius: var(--radius-sm);
+            border: none;
+            font-family: inherit;
+            font-size: 12px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all .2s;
+            color: #fff;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, var(--accent), #4f46e5);
+            box-shadow: 0 4px 16px var(--glow);
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 6px 24px var(--glow);
+        }
+
+        .btn-primary:disabled {
+            opacity: .4;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+
+        .btn-sm {
+            padding: 5px 10px;
+            font-size: 11px;
+            border-radius: 7px;
+        }
+
+        .btn-ghost {
+            background: rgba(255, 255, 255, 0.05);
+            color: var(--text2);
+        }
+
+        .btn-ghost:hover {
+            background: rgba(255, 255, 255, 0.1);
+            color: var(--text);
+        }
+
+        .btn-danger {
+            background: rgba(239, 68, 68, 0.12);
+            color: var(--err);
+        }
+
+        .btn-danger:hover {
+            background: rgba(239, 68, 68, 0.2);
+        }
+
+        .btn-success {
+            background: rgba(16, 185, 129, 0.12);
+            color: var(--ok);
+        }
+
+        .btn-success:hover {
+            background: rgba(16, 185, 129, 0.2);
+        }
+
+        .btn-full {
+            width: 100%;
+            justify-content: center;
+            padding: 12px;
+            font-size: 14px;
+        }
+
+        /* === Progress === */
+        .progress-panel {
+            display: none;
+        }
+
+        .progress-panel.on {
+            display: block;
+            animation: fadeIn .3s;
+        }
+
+        .progress-bar-track {
+            height: 8px;
+            background: rgba(255, 255, 255, 0.06);
+            border-radius: 4px;
+            overflow: hidden;
+            margin: 10px 0;
+        }
+
+        .progress-bar-fill {
+            height: 100%;
+            border-radius: 4px;
+            transition: width .5s ease;
+            background: linear-gradient(90deg, var(--accent), var(--ok));
+            box-shadow: 0 0 14px var(--glow);
+        }
+
+        .progress-info {
+            display: flex;
+            justify-content: space-between;
+            font-size: 11px;
+            color: var(--text2);
+        }
+
+        .progress-file {
+            font-size: 12px;
+            color: var(--accent2);
+            margin-bottom: 6px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .stats-row {
+            display: flex;
+            gap: 10px;
+            margin-top: 10px;
+            flex-wrap: wrap;
+        }
+
+        .stat-badge {
+            padding: 6px 12px;
+            border-radius: 8px;
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid var(--border);
+            font-size: 11px;
+        }
+
+        .stat-badge b {
+            color: var(--accent2);
+        }
+
+        /* === Dashboard === */
+        .dashboard-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 12px;
+            margin-bottom: 16px;
+        }
+
+        @media (max-width: 768px) {
+            .dashboard-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+
+        .stat-card {
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: 14px;
+            padding: 18px;
+            text-align: center;
+            transition: all .3s;
+        }
+
+        .stat-card:hover {
+            border-color: var(--border2);
+            transform: translateY(-2px);
+        }
+
+        .stat-card .stat-value {
+            font-size: 28px;
+            font-weight: 700;
+            background: linear-gradient(135deg, var(--accent2), var(--accent));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            line-height: 1.2;
+        }
+
+        .stat-card .stat-label {
+            font-size: 11px;
+            color: var(--text3);
+            margin-top: 4px;
+        }
+
+        .stat-card.green .stat-value {
+            background: linear-gradient(135deg, var(--ok), #059669);
+            -webkit-background-clip: text;
+        }
+
+        .stat-card.blue .stat-value {
+            background: linear-gradient(135deg, var(--blue), #2563eb);
+            -webkit-background-clip: text;
+        }
+
+        .stat-card.amber .stat-value {
+            background: linear-gradient(135deg, var(--warn), #d97706);
+            -webkit-background-clip: text;
+        }
+
+        /* === Chart === */
+        .chart-container {
+            height: 160px;
+            display: flex;
+            align-items: flex-end;
+            gap: 3px;
+            padding: 10px 0;
+        }
+
+        .chart-bar {
+            flex: 1;
+            background: linear-gradient(to top, var(--accent), var(--accent2));
+            border-radius: 4px 4px 0 0;
+            min-height: 4px;
+            transition: height .5s;
+            position: relative;
+            cursor: pointer;
+        }
+
+        .chart-bar:hover {
+            opacity: 0.8;
+        }
+
+        .chart-bar .tooltip {
+            position: absolute;
+            bottom: 100%;
+            left: 50%;
+            transform: translateX(-50%);
+            background: var(--card2);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            padding: 4px 8px;
+            font-size: 10px;
+            white-space: nowrap;
+            display: none;
+            z-index: 10;
+        }
+
+        .chart-bar:hover .tooltip {
+            display: block;
+        }
+
+        .chart-labels {
+            display: flex;
+            justify-content: space-between;
+            font-size: 9px;
+            color: var(--text3);
+            padding-top: 4px;
+        }
+
+        /* === History Table === */
+        .history-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 12px;
+        }
+
+        .history-table th {
+            text-align: left;
+            padding: 10px 12px;
+            border-bottom: 2px solid var(--border);
+            color: var(--text2);
+            font-weight: 600;
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .history-table td {
+            padding: 9px 12px;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .history-table tr:hover td {
+            background: rgba(255, 255, 255, 0.02);
+        }
+
+        .badge {
+            padding: 3px 8px;
+            border-radius: 6px;
+            font-size: 10px;
+            font-weight: 600;
+        }
+
+        .badge-ok {
+            background: rgba(16, 185, 129, 0.12);
+            color: var(--ok);
+        }
+
+        .badge-err {
+            background: rgba(239, 68, 68, 0.12);
+            color: var(--err);
+        }
+
+        .badge-pending {
+            background: rgba(245, 158, 11, 0.12);
+            color: var(--warn);
+        }
+
+        .badge-drive {
+            background: rgba(59, 130, 246, 0.12);
+            color: var(--blue);
+        }
+
+        .badge-upload {
+            background: rgba(99, 102, 241, 0.12);
+            color: var(--accent2);
+        }
+
+        /* === Drive Panel === */
+        .drive-status-card {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            padding: 20px;
+        }
+
+        .drive-icon {
+            width: 48px;
+            height: 48px;
+            border-radius: 14px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+            flex-shrink: 0;
+        }
+
+        .drive-icon.enabled {
+            background: rgba(16, 185, 129, 0.12);
+        }
+
+        .drive-icon.disabled {
+            background: rgba(255, 255, 255, 0.05);
+        }
+
+        /* === Modal === */
+        .modal-overlay {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.7);
+            z-index: 1000;
+            backdrop-filter: blur(6px);
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+
+        .modal-overlay.on {
+            display: flex;
+        }
+
+        .modal {
+            background: var(--bg2);
+            border: 1px solid var(--border);
+            border-radius: 18px;
+            width: 100%;
+            max-width: 850px;
+            max-height: 85vh;
+            display: flex;
+            flex-direction: column;
+            box-shadow: 0 24px 64px rgba(0, 0, 0, 0.5);
+        }
+
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 16px 20px;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .modal-header h3 {
+            font-size: 14px;
+        }
+
+        .modal-close {
+            background: none;
+            border: none;
+            color: var(--text2);
+            font-size: 18px;
+            cursor: pointer;
+            padding: 4px 8px;
+            border-radius: 6px;
+        }
+
+        .modal-close:hover {
+            background: rgba(255, 255, 255, 0.1);
+        }
+
+        .modal-body {
+            padding: 20px;
+            overflow-y: auto;
+            flex: 1;
+            font-size: 13px;
+            line-height: 1.8;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+        }
+
+        /* === Toast === */
+        .toast {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            z-index: 2000;
+            padding: 12px 20px;
+            border-radius: 12px;
+            font-size: 13px;
+            background: var(--card2);
+            border: 1px solid var(--border);
+            box-shadow: 0 12px 40px rgba(0, 0, 0, 0.4);
+            transform: translateY(80px);
+            opacity: 0;
+            transition: all .3s cubic-bezier(0.4, 0, 0.2, 1);
+            backdrop-filter: blur(20px);
+        }
+
+        .toast.on {
+            transform: translateY(0);
+            opacity: 1;
+        }
+
+        /* === Reports table === */
+        .report-section {
+            margin-top: 16px;
+        }
+
+        .report-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 11px;
+        }
+
+        .report-table th {
+            text-align: left;
+            padding: 8px 10px;
+            border-bottom: 2px solid var(--border);
+            color: var(--text2);
+            font-weight: 600;
+        }
+
+        .report-table td {
+            padding: 7px 10px;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .report-table tr:hover td {
+            background: rgba(255, 255, 255, 0.02);
+        }
+
+        .report-table tfoot td {
+            border-top: 2px solid var(--border);
+            font-weight: 600;
+        }
+
+        /* === Scrollbar === */
+        ::-webkit-scrollbar {
+            width: 5px;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 3px;
+        }
+
+        /* === Pulse animation === */
+        @keyframes pulse {
+
+            0%,
+            100% {
+                opacity: 1;
+            }
+
+            50% {
+                opacity: .4;
+            }
+        }
+
+        .pulse {
+            animation: pulse 1.5s ease-in-out infinite;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="app">
+        <!-- Header -->
+        <header class="header">
+            <div class="header-left">
+                <div class="header-logo">📄</div>
+                <div>
+                    <h1>GLM-OCR</h1>
+                    <div class="subtitle">Hệ thống OCR dữ liệu chính</div>
+                </div>
+            </div>
+            <div class="header-right">
+                <div class="api-badge" id="api-badge">
+                    <span class="api-dot" id="api-dot"></span>
+                    <span id="api-text">MaaS API</span>
+                </div>
+                <a href="/logout" class="logout-btn">🔒 Đăng xuất</a>
+            </div>
+        </header>
+
+        <!-- Tabs -->
+        <div class="tabs">
+            <button class="tab active" data-tab="ocr">📤 Upload & OCR</button>
+            <button class="tab" data-tab="dashboard">📊 Dashboard</button>
+            <button class="tab" data-tab="drive">📁 Google Drive</button>
+        </div>
+
+        <!-- Tab 1: Upload & OCR -->
+        <div class="tab-panel active" id="tab-ocr">
+            <div class="card">
+                <div class="card-title">📤 Upload PDF</div>
+                <label for="file-input" class="upload-zone" id="upload-zone">
+                    <div class="icon">📁</div>
+                    <p>Kéo thả file PDF hoặc <b>nhấn để chọn</b></p>
+                    <p style="margin-top:4px;font-size:11px;color:var(--text3)">Hỗ trợ nhiều file, tối đa 200MB</p>
+                    <input type="file" id="file-input" multiple accept=".pdf">
+                </label>
+            </div>
+
+            <div class="grid">
+                <div class="card">
+                    <div class="card-title">📋 File PDF <span class="count" id="pdf-count"></span></div>
+                    <div id="pdf-list" class="file-list">
+                        <div class="empty-state">Chưa có file PDF</div>
+                    </div>
+                    <div style="margin-top:14px">
+                        <button class="btn btn-primary btn-full" id="btn-ocr">🔍 Bắt đầu OCR tất cả</button>
+                    </div>
+                </div>
+                <div class="card">
+                    <div class="card-title">✅ Kết quả Markdown <span class="count" id="md-count"></span></div>
+                    <div id="md-list" class="file-list">
+                        <div class="empty-state">Chưa có kết quả</div>
+                    </div>
+                    <div style="margin-top:14px">
+                        <button class="btn btn-success btn-full" id="btn-download-all">📦 Tải tất cả (ZIP)</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Progress Panel -->
+            <div class="card progress-panel" id="progress-panel">
+                <div class="card-title"><span class="pulse">⚡</span> Đang xử lý OCR...</div>
+                <div class="progress-file" id="progress-file">—</div>
+                <div class="progress-bar-track">
+                    <div class="progress-bar-fill" id="progress-fill" style="width:0%"></div>
+                </div>
+                <div class="progress-info">
+                    <span id="progress-pct">0%</span>
+                    <span id="progress-time">0s</span>
+                </div>
+                <div class="stats-row">
+                    <div class="stat-badge">File: <b id="stat-files">0/0</b></div>
+                    <div class="stat-badge">Trang: <b id="stat-pages">0/0</b></div>
+                    <div class="stat-badge">⏱ <b id="stat-elapsed">0s</b></div>
+                </div>
+            </div>
+
+            <!-- Batch Report -->
+            <div class="card progress-panel" id="report-panel">
+                <div class="card-title">📊 Báo cáo xử lý</div>
+                <div id="report-body"></div>
+            </div>
+        </div>
+
+        <!-- Tab 2: Dashboard -->
+        <div class="tab-panel" id="tab-dashboard">
+            <div class="dashboard-grid" id="dashboard-stats">
+                <div class="stat-card">
+                    <div class="stat-value" id="ds-total">0</div>
+                    <div class="stat-label">Tổng file đã OCR</div>
+                </div>
+                <div class="stat-card green">
+                    <div class="stat-value" id="ds-pages">0</div>
+                    <div class="stat-label">Tổng trang</div>
+                </div>
+                <div class="stat-card blue">
+                    <div class="stat-value" id="ds-avgtime">0s</div>
+                    <div class="stat-label">TB / trang</div>
+                </div>
+                <div class="stat-card amber">
+                    <div class="stat-value" id="ds-success">0%</div>
+                    <div class="stat-label">Tỉ lệ thành công</div>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-title">📈 Biểu đồ xử lý theo ngày (30 ngày)</div>
+                <div class="chart-container" id="chart"></div>
+                <div class="chart-labels" id="chart-labels"></div>
+            </div>
+
+            <div class="card">
+                <div class="card-title">🕐 Lịch sử gần đây</div>
+                <div style="overflow-x:auto">
+                    <table class="history-table">
+                        <thead>
+                            <tr>
+                                <th>File</th>
+                                <th>Trang</th>
+                                <th>OCR</th>
+                                <th>TB/trang</th>
+                                <th>Nguồn</th>
+                                <th>Trạng thái</th>
+                                <th>Thời gian</th>
+                            </tr>
+                        </thead>
+                        <tbody id="history-body"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- Tab 3: Google Drive -->
+        <div class="tab-panel" id="tab-drive">
+            <div class="card">
+                <div class="drive-status-card">
+                    <div class="drive-icon" id="drive-icon">📁</div>
+                    <div>
+                        <div style="font-size:15px;font-weight:600" id="drive-title">Google Drive Sync</div>
+                        <div style="font-size:12px;color:var(--text2);margin-top:4px" id="drive-detail">Đang kiểm tra...
+                        </div>
+                    </div>
+                    <div style="margin-left:auto">
+                        <button class="btn btn-primary" id="btn-sync-now" disabled>🔄 Sync ngay</button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="grid">
+                <div class="card">
+                    <div class="card-title">📥 Thông tin</div>
+                    <div style="font-size:12px;color:var(--text2);line-height:1.8">
+                        <p><b>Cách hoạt động:</b></p>
+                        <p>1. Share folder Google Drive cho Service Account</p>
+                        <p>2. Đặt PDF vào folder Input → hệ thống tự OCR</p>
+                        <p>3. Kết quả markdown xuất hiện ở folder Output</p>
+                        <p>4. File PDF đã xử lý sẽ chuyển vào subfolder "processed"</p>
+                    </div>
+                </div>
+                <div class="card">
+                    <div class="card-title">📊 Thống kê Drive</div>
+                    <div style="font-size:13px;line-height:2">
+                        <div>Trạng thái: <b id="drive-status-text">—</b></div>
+                        <div>File đã sync: <b id="drive-synced">0</b></div>
+                        <div>Sync gần nhất: <b id="drive-last-sync">—</b></div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card" id="drive-errors-card" style="display:none">
+                <div class="card-title" style="color:var(--err)">⚠️ Lỗi gần đây</div>
+                <div id="drive-errors"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal -->
+    <div class="modal-overlay" id="modal">
+        <div class="modal">
+            <div class="modal-header">
+                <h3 id="modal-title">Preview</h3>
+                <button class="modal-close" id="modal-close">✕</button>
+            </div>
+            <div class="modal-body" id="modal-body"></div>
+        </div>
+    </div>
+
+    <!-- Toast -->
+    <div class="toast" id="toast"></div>
+
+    <script>
+        // === Utils ===
+        function fmtSize(b) {
+            if (b < 1024) return b + ' B';
+            if (b < 1048576) return (b / 1024).toFixed(1) + ' KB';
+            return (b / 1048576).toFixed(1) + ' MB';
+        }
+        function fmtTime(s) {
+            if (s < 60) return Math.round(s) + 's';
+            return Math.floor(s / 60) + 'm ' + Math.round(s % 60) + 's';
+        }
+        function toast(msg) {
+            var el = document.getElementById('toast');
+            el.textContent = msg;
+            el.classList.add('on');
+            setTimeout(function () { el.classList.remove('on'); }, 3500);
+        }
+        function authCheck(r) {
+            if (r.status === 401) { window.location = '/login'; return false; }
+            return true;
+        }
+
+        // === Tabs ===
+        document.querySelectorAll('.tab').forEach(function (tab) {
+            tab.addEventListener('click', function () {
+                document.querySelectorAll('.tab').forEach(function (t) { t.classList.remove('active'); });
+                document.querySelectorAll('.tab-panel').forEach(function (p) { p.classList.remove('active'); });
+                tab.classList.add('active');
+                document.getElementById('tab-' + tab.dataset.tab).classList.add('active');
+                if (tab.dataset.tab === 'dashboard') loadDashboard();
+                if (tab.dataset.tab === 'drive') loadDriveStatus();
+            });
+        });
+
+        // === Upload ===
+        var uploadZone = document.getElementById('upload-zone');
+        var fileInput = document.getElementById('file-input');
+
+        uploadZone.addEventListener('dragover', function (e) { e.preventDefault(); uploadZone.classList.add('dragover'); });
+        uploadZone.addEventListener('dragleave', function () { uploadZone.classList.remove('dragover'); });
+        uploadZone.addEventListener('drop', function (e) {
+            e.preventDefault();
+            uploadZone.classList.remove('dragover');
+            uploadFiles(e.dataTransfer.files);
+        });
+        fileInput.addEventListener('change', function () { if (fileInput.files.length) uploadFiles(fileInput.files); });
+
+        function uploadFiles(files) {
+            var fd = new FormData();
+            var count = 0;
+            for (var i = 0; i < files.length; i++) {
+                if (files[i].name.toLowerCase().endsWith('.pdf')) {
+                    fd.append('files', files[i]);
+                    count++;
+                }
+            }
+            if (!count) { toast('⚠️ Chỉ hỗ trợ file PDF'); return; }
+            toast('⏳ Đang upload ' + count + ' file...');
+            fetch('/api/upload', { method: 'POST', body: fd })
+                .then(function (r) { if (!authCheck(r)) return; return r.json(); })
+                .then(function (d) {
+                    if (d && d.uploaded) {
+                        toast('✅ Upload ' + d.uploaded.length + ' file thành công');
+                        refreshFiles();
+                    }
+                })
+                .catch(function (e) { toast('❌ Lỗi: ' + e.message); });
+        }
+
+        // === Files ===
+        function refreshFiles() {
+            fetch('/api/files')
+                .then(function (r) { if (!authCheck(r)) return; return r.json(); })
+                .then(function (d) { if (d) { renderPdfs(d.pdfs); renderMds(d.markdowns); } })
+                .catch(function (e) { console.error(e); });
+        }
+
+        function renderPdfs(files) {
+            var el = document.getElementById('pdf-list');
+            document.getElementById('pdf-count').textContent = files.length ? '(' + files.length + ')' : '';
+            if (!files.length) { el.innerHTML = '<div class="empty-state">Chưa có file PDF</div>'; return; }
+            var h = '';
+            files.forEach(function (f) {
+                h += '<div class="file-item">'
+                    + '<span class="file-name">📄 ' + f.name + '</span>'
+                    + '<span class="file-size">' + fmtSize(f.size) + '</span>'
+                    + '<div class="file-actions">'
+                    + '<button class="btn btn-sm btn-danger" onclick="deleteFile(\'' + f.name + '\')">✕</button>'
+                    + '</div></div>';
+            });
+            el.innerHTML = h;
+        }
+
+        function renderMds(files) {
+            var el = document.getElementById('md-list');
+            document.getElementById('md-count').textContent = files.length ? '(' + files.length + ')' : '';
+            if (!files.length) { el.innerHTML = '<div class="empty-state">Chưa có kết quả</div>'; return; }
+            var h = '';
+            files.forEach(function (f) {
+                h += '<div class="file-item">'
+                    + '<span class="file-name">📝 ' + f.name + '</span>'
+                    + '<span class="file-size">' + fmtSize(f.size) + '</span>'
+                    + '<div class="file-actions">'
+                    + '<button class="btn btn-sm btn-ghost" onclick="previewFile(\'' + f.name + '\')">👁</button>'
+                    + '<button class="btn btn-sm btn-success" onclick="downloadFile(\'' + f.name + '\')">⬇</button>'
+                    + '</div></div>';
+            });
+            el.innerHTML = h;
+        }
+
+        function deleteFile(name) {
+            fetch('/api/delete/' + encodeURIComponent(name), { method: 'DELETE' })
+                .then(function () { refreshFiles(); toast('🗑 Đã xóa ' + name); });
+        }
+
+        function previewFile(name) {
+            fetch('/api/preview/' + encodeURIComponent(name))
+                .then(function (r) { if (!authCheck(r)) return; return r.json(); })
+                .then(function (d) {
+                    if (d) {
+                        document.getElementById('modal-title').textContent = '📝 ' + name;
+                        document.getElementById('modal-body').textContent = d.content;
+                        document.getElementById('modal').classList.add('on');
+                    }
+                });
+        }
+
+        function downloadFile(name) { window.open('/api/download/' + encodeURIComponent(name)); }
+
+        // === OCR ===
+        var pollInterval = null;
+
+        document.getElementById('btn-ocr').addEventListener('click', function () {
+            fetch('/api/ocr', { method: 'POST', headers: { 'Content-Type': 'application/json' } })
+                .then(function (r) { return r.json(); })
+                .then(function (d) {
+                    if (d.error) { toast('⚠️ ' + d.error); return; }
+                    toast('🚀 OCR ' + d.started + ' file...');
+                    document.getElementById('progress-panel').classList.add('on');
+                    document.getElementById('report-panel').classList.remove('on');
+                    document.getElementById('btn-ocr').disabled = true;
+                    startPolling();
+                })
+                .catch(function (e) { toast('❌ ' + e.message); });
+        });
+
+        function startPolling() {
+            if (pollInterval) clearInterval(pollInterval);
+            pollInterval = setInterval(pollStatus, 1200);
+        }
+
+        function pollStatus() {
+            fetch('/api/status')
+                .then(function (r) { if (!authCheck(r)) return null; return r.json(); })
+                .then(function (s) {
+                    if (!s) return;
+                    var fd = s.files_done || 0, ft = s.files_total || 0;
+                    var cp = s.current_page || 0, tp = s.total_pages || 0;
+                    var el = s.elapsed || 0;
+                    var pct = ft > 0 ? Math.round(((fd + (tp > 0 ? cp / tp : 0)) / ft) * 100) : 0;
+
+                    document.getElementById('progress-fill').style.width = pct + '%';
+                    document.getElementById('progress-pct').textContent = pct + '%';
+                    document.getElementById('progress-file').textContent = s.current_file || '—';
+                    document.getElementById('progress-time').textContent = fmtTime(el);
+                    document.getElementById('stat-files').textContent = fd + '/' + ft;
+                    document.getElementById('stat-pages').textContent = cp + '/' + tp;
+                    document.getElementById('stat-elapsed').textContent = fmtTime(el);
+
+                    if (!s.running && ft > 0) {
+                        clearInterval(pollInterval);
+                        pollInterval = null;
+                        document.getElementById('progress-fill').style.width = '100%';
+                        document.getElementById('progress-pct').textContent = '100%';
+                        document.getElementById('btn-ocr').disabled = false;
+
+                        var ok = s.results ? s.results.filter(function (r) { return r.status === 'ok'; }).length : 0;
+                        toast('✅ Hoàn tất! ' + ok + '/' + ft + ' file OK (' + fmtTime(el) + ')');
+                        buildReport(s);
+                        setTimeout(function () {
+                            document.getElementById('progress-panel').classList.remove('on');
+                            refreshFiles();
+                        }, 2500);
+                    }
+                });
+        }
+
+        function buildReport(s) {
+            if (!s.results || !s.results.length) return;
+            document.getElementById('report-panel').classList.add('on');
+            var h = '<table class="report-table"><thead><tr><th>File</th><th>Trang</th><th>Convert</th><th>OCR</th><th>TB/trang</th><th>Trạng thái</th></tr></thead><tbody>';
+            var tP = 0, tO = 0, tC = 0;
+            s.results.forEach(function (r) {
+                var statusHtml = r.status === 'ok'
+                    ? '<span class="badge badge-ok">✓ OK</span>'
+                    : '<span class="badge badge-err">✕ Lỗi</span>';
+                h += '<tr><td>' + r.file + '</td><td>' + r.pages + '</td><td>' + (r.time_convert || 0) + 's</td><td>' + (r.time_ocr || 0) + 's</td><td>' + (r.avg_per_page || 0) + 's</td><td>' + statusHtml + '</td></tr>';
+                if (r.status === 'ok') { tP += r.pages; tO += r.time_ocr || 0; tC += r.time_convert || 0; }
+            });
+            h += '</tbody><tfoot><tr><td><b>TỔNG</b></td><td>' + tP + '</td><td>' + tC.toFixed(1) + 's</td><td>' + tO.toFixed(1) + 's</td><td>' + (tO / Math.max(tP, 1)).toFixed(2) + 's</td><td></td></tr></tfoot></table>';
+            document.getElementById('report-body').innerHTML = h;
+        }
+
+        // === Dashboard ===
+        function loadDashboard() {
+            fetch('/api/dashboard')
+                .then(function (r) { if (!authCheck(r)) return; return r.json(); })
+                .then(function (d) {
+                    if (!d) return;
+                    // Stats
+                    var s = d.stats || {};
+                    document.getElementById('ds-total').textContent = s.total_jobs || 0;
+                    document.getElementById('ds-pages').textContent = s.total_pages || 0;
+                    document.getElementById('ds-avgtime').textContent = (s.avg_time_per_page || 0).toFixed(1) + 's';
+                    var rate = s.total_jobs > 0 ? Math.round((s.success_jobs || 0) / s.total_jobs * 100) : 0;
+                    document.getElementById('ds-success').textContent = rate + '%';
+
+                    // Chart
+                    renderChart(d.daily || []);
+
+                    // History
+                    renderHistory(d.recent || []);
+                });
+        }
+
+        function renderChart(daily) {
+            var el = document.getElementById('chart');
+            var labels = document.getElementById('chart-labels');
+            if (!daily.length) {
+                el.innerHTML = '<div class="empty-state" style="width:100%">Chưa có dữ liệu</div>';
+                labels.innerHTML = '';
+                return;
+            }
+            var maxPages = Math.max.apply(null, daily.map(function (d) { return d.pages || 1; }));
+            var h = '';
+            daily.forEach(function (d) {
+                var pct = Math.max(4, (d.pages / maxPages) * 100);
+                h += '<div class="chart-bar" style="height:' + pct + '%">'
+                    + '<div class="tooltip">' + d.day + '<br>' + d.pages + ' trang / ' + d.jobs + ' file</div>'
+                    + '</div>';
+            });
+            el.innerHTML = h;
+            if (daily.length > 1) {
+                labels.innerHTML = '<span>' + daily[0].day + '</span><span>' + daily[daily.length - 1].day + '</span>';
+            }
+        }
+
+        function renderHistory(jobs) {
+            var el = document.getElementById('history-body');
+            if (!jobs.length) { el.innerHTML = '<tr><td colspan="7" class="empty-state">Chưa có lịch sử</td></tr>'; return; }
+            var h = '';
+            jobs.forEach(function (j) {
+                var statusBadge = j.status === 'ok' ? '<span class="badge badge-ok">✓</span>'
+                    : j.status === 'error' ? '<span class="badge badge-err">✕</span>'
+                        : '<span class="badge badge-pending">…</span>';
+                var sourceBadge = j.source === 'google_drive' ? '<span class="badge badge-drive">Drive</span>'
+                    : '<span class="badge badge-upload">Upload</span>';
+                var timeStr = j.created_at ? new Date(j.created_at * 1000).toLocaleString('vi-VN') : '—';
+                h += '<tr>'
+                    + '<td>' + j.filename + '</td>'
+                    + '<td>' + (j.pages || 0) + '</td>'
+                    + '<td>' + (j.time_ocr || 0) + 's</td>'
+                    + '<td>' + (j.avg_per_page || 0) + 's</td>'
+                    + '<td>' + sourceBadge + '</td>'
+                    + '<td>' + statusBadge + '</td>'
+                    + '<td style="font-size:10px;color:var(--text3)">' + timeStr + '</td>'
+                    + '</tr>';
+            });
+            el.innerHTML = h;
+        }
+
+        // === Drive ===
+        function loadDriveStatus() {
+            fetch('/api/drive/status')
+                .then(function (r) { if (!authCheck(r)) return; return r.json(); })
+                .then(function (d) {
+                    if (!d) return;
+                    var icon = document.getElementById('drive-icon');
+                    var title = document.getElementById('drive-title');
+                    var detail = document.getElementById('drive-detail');
+                    var syncBtn = document.getElementById('btn-sync-now');
+
+                    if (d.enabled) {
+                        icon.className = 'drive-icon enabled';
+                        icon.textContent = '✅';
+                        title.textContent = 'Google Drive Sync — Đang hoạt động';
+                        detail.textContent = 'Trạng thái: ' + d.status + ' | Interval: tự động';
+                        syncBtn.disabled = false;
+                    } else {
+                        icon.className = 'drive-icon disabled';
+                        icon.textContent = '⏸️';
+                        title.textContent = 'Google Drive Sync — Chưa kích hoạt';
+                        detail.textContent = 'Cần cấu hình GOOGLE_DRIVE_ENABLED=true, DRIVE_INPUT_FOLDER_ID, và credentials';
+                        syncBtn.disabled = true;
+                    }
+
+                    document.getElementById('drive-status-text').textContent = d.status || '—';
+                    document.getElementById('drive-synced').textContent = d.files_synced || 0;
+                    document.getElementById('drive-last-sync').textContent = d.last_sync
+                        ? new Date(d.last_sync * 1000).toLocaleString('vi-VN')
+                        : '—';
+
+                    // Errors
+                    if (d.errors && d.errors.length) {
+                        document.getElementById('drive-errors-card').style.display = 'block';
+                        var h = '';
+                        d.errors.forEach(function (e) {
+                            h += '<div class="file-item" style="background:rgba(239,68,68,0.05)">'
+                                + '<span class="file-name" style="color:var(--err)">' + e.file + '</span>'
+                                + '<span class="file-size">' + (e.error || '') + '</span>'
+                                + '</div>';
+                        });
+                        document.getElementById('drive-errors').innerHTML = h;
+                    }
+                });
+        }
+
+        document.getElementById('btn-sync-now').addEventListener('click', function () {
+            this.disabled = true;
+            fetch('/api/drive/sync', { method: 'POST' })
+                .then(function (r) { return r.json(); })
+                .then(function (d) {
+                    if (d.error) toast('⚠️ ' + d.error);
+                    else toast('✅ Synced ' + d.synced + ' file(s)');
+                    loadDriveStatus();
+                    document.getElementById('btn-sync-now').disabled = false;
+                })
+                .catch(function (e) {
+                    toast('❌ ' + e.message);
+                    document.getElementById('btn-sync-now').disabled = false;
+                });
+        });
+
+        // === Modal ===
+        document.getElementById('modal-close').addEventListener('click', function () {
+            document.getElementById('modal').classList.remove('on');
+        });
+        document.getElementById('modal').addEventListener('click', function (e) {
+            if (e.target === document.getElementById('modal')) document.getElementById('modal').classList.remove('on');
+        });
+
+        // === Download All ===
+        document.getElementById('btn-download-all').addEventListener('click', function () {
+            window.open('/api/download_all');
+        });
+
+        // === Init ===
+        refreshFiles();
+
+        // Check if OCR is running
+        fetch('/api/status')
+            .then(function (r) { return r.json(); })
+            .then(function (s) {
+                if (s && s.running) {
+                    document.getElementById('progress-panel').classList.add('on');
+                    document.getElementById('btn-ocr').disabled = true;
+                    startPolling();
+                }
+            })
+            .catch(function () { });
+
+        // API health check
+        fetch('/health')
+            .then(function (r) { return r.json(); })
+            .then(function (d) {
+                document.getElementById('api-dot').classList.add('on');
+                document.getElementById('api-text').textContent = 'MaaS API: Online';
+            })
+            .catch(function () {
+                document.getElementById('api-text').textContent = 'MaaS API: Offline';
+            });
+    </script>
+</body>
+
+</html>

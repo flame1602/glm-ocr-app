@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Đăng nhập — GLM-OCR</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #0a0e17;
+  --card: rgba(17,24,39,0.75);
+  --border: rgba(255,255,255,0.08);
+  --text: #e5e7eb;
+  --text2: #9ca3af;
+  --accent: #6366f1;
+  --accent2: #818cf8;
+  --glow: rgba(99,102,241,0.3);
+  --err: #ef4444;
+}
+* { margin:0; padding:0; box-sizing:border-box; }
+body {
+  font-family: 'Inter', system-ui, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background:
+    radial-gradient(circle at 30% 30%, rgba(99,102,241,0.12), transparent 50%),
+    radial-gradient(circle at 70% 70%, rgba(16,185,129,0.08), transparent 50%);
+  z-index: 0;
+}
+/* Animated particles */
+.particles {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+}
+.particles span {
+  position: absolute;
+  width: 3px;
+  height: 3px;
+  background: rgba(99,102,241,0.4);
+  border-radius: 50%;
+  animation: float 15s infinite linear;
+}
+@keyframes float {
+  0% { transform: translateY(100vh) scale(0); opacity: 0; }
+  10% { opacity: 1; }
+  90% { opacity: 1; }
+  100% { transform: translateY(-10vh) scale(1); opacity: 0; }
+}
+.box {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 24px;
+  padding: 48px 40px;
+  width: 100%;
+  max-width: 400px;
+  backdrop-filter: blur(24px);
+  position: relative;
+  z-index: 1;
+  text-align: center;
+  box-shadow: 0 24px 64px rgba(0,0,0,0.4);
+}
+.logo {
+  width: 64px;
+  height: 64px;
+  margin: 0 auto 20px;
+  background: linear-gradient(135deg, var(--accent), #4f46e5);
+  border-radius: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 28px;
+  box-shadow: 0 8px 32px var(--glow);
+}
+h1 {
+  font-size: 24px;
+  font-weight: 700;
+  margin-bottom: 6px;
+  background: linear-gradient(135deg, var(--accent2), var(--accent));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+.sub { color: var(--text2); font-size: 13px; margin-bottom: 28px; }
+input {
+  width: 100%;
+  padding: 14px 18px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: rgba(255,255,255,0.05);
+  color: var(--text);
+  font-family: inherit;
+  font-size: 14px;
+  margin-bottom: 16px;
+  outline: none;
+  transition: border .3s, box-shadow .3s;
+}
+input:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 20px var(--glow);
+}
+button {
+  width: 100%;
+  padding: 14px;
+  border-radius: 12px;
+  border: none;
+  background: linear-gradient(135deg, var(--accent), #4f46e5);
+  color: #fff;
+  font-family: inherit;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all .3s;
+  box-shadow: 0 6px 20px var(--glow);
+  position: relative;
+  overflow: hidden;
+}
+button:hover { transform: translateY(-2px); box-shadow: 0 8px 28px var(--glow); }
+button:active { transform: translateY(0); }
+button::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(135deg, transparent, rgba(255,255,255,0.1));
+  opacity: 0;
+  transition: opacity .3s;
+}
+button:hover::after { opacity: 1; }
+.err {
+  color: var(--err);
+  font-size: 12px;
+  margin-top: 12px;
+  padding: 8px;
+  border-radius: 8px;
+  background: rgba(239,68,68,0.1);
+  border: 1px solid rgba(239,68,68,0.2);
+  display: none;
+}
+.loading {
+  display: none;
+  margin-top: 12px;
+  font-size: 12px;
+  color: var(--text2);
+}
+.loading.on { display: block; }
+</style>
+</head>
+<body>
+<div class="particles" id="particles"></div>
+<div class="box">
+  <div class="logo">📄</div>
+  <h1>GLM-OCR</h1>
+  <p class="sub">Hệ thống OCR dữ liệu chính — Nhập mật khẩu để truy cập</p>
+  <form onsubmit="return doLogin(event)">
+    <input type="password" id="pw" placeholder="Mật khẩu" autofocus autocomplete="current-password">
+    <button type="submit" id="btn">Đăng nhập</button>
+  </form>
+  <div class="err" id="err">Mật khẩu không đúng</div>
+  <div class="loading" id="loading">⏳ Đang xác thực...</div>
+</div>
+<script>
+// Particles
+(function() {
+  var p = document.getElementById('particles');
+  for (var i = 0; i < 30; i++) {
+    var s = document.createElement('span');
+    s.style.left = Math.random() * 100 + '%';
+    s.style.animationDelay = Math.random() * 15 + 's';
+    s.style.animationDuration = (10 + Math.random() * 20) + 's';
+    s.style.width = s.style.height = (2 + Math.random() * 3) + 'px';
+    p.appendChild(s);
+  }
+})();
+
+async function doLogin(e) {
+  e.preventDefault();
+  var pw = document.getElementById('pw').value;
+  var err = document.getElementById('err');
+  var loading = document.getElementById('loading');
+  err.style.display = 'none';
+  loading.classList.add('on');
+  document.getElementById('btn').disabled = true;
+  try {
+    var r = await fetch('/login', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({password: pw})
+    });
+    var d = await r.json();
+    if (d.ok) {
+      window.location = '/';
+    } else {
+      err.textContent = d.error || 'Mật khẩu không đúng';
+      err.style.display = 'block';
+    }
+  } catch(ex) {
+    err.textContent = 'Lỗi kết nối server';
+    err.style.display = 'block';
+  }
+  loading.classList.remove('on');
+  document.getElementById('btn').disabled = false;
+  return false;
+}
+</script>
+</body>
+</html>
