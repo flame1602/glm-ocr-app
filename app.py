@@ -64,9 +64,12 @@ def ocr_pdf_maas(pdf_path):
     mime = "application/pdf" if ext == ".pdf" else f"image/{ext.lstrip('.')}"
     data_uri = f"data:{mime};base64,{b64}"
 
+    api_url = f"{config.ZHIPU_API_BASE}/layout_parsing"
+    print(f"[OCR] Calling {api_url} for {Path(pdf_path).name} ({len(b64)} chars base64)")
+
     # Call layout_parsing API
     resp = req.post(
-        f"{config.ZHIPU_API_BASE}/layout_parsing",
+        api_url,
         headers={
             "Authorization": f"Bearer {config.ZHIPU_API_KEY}",
             "Content-Type": "application/json"
@@ -74,8 +77,15 @@ def ocr_pdf_maas(pdf_path):
         json={"model": config.OCR_MODEL, "file": data_uri},
         timeout=300
     )
-    resp.raise_for_status()
+
+    # Log error details before raising
+    if resp.status_code != 200:
+        print(f"[OCR ERROR] Status: {resp.status_code}")
+        print(f"[OCR ERROR] Response: {resp.text[:2000]}")
+        resp.raise_for_status()
+
     result = resp.json()
+    print(f"[OCR] Response keys: {list(result.keys())}")
 
     # Extract markdown content from response
     if "data" in result and "content" in result["data"]:
@@ -85,6 +95,7 @@ def ocr_pdf_maas(pdf_path):
     elif "choices" in result:
         return result["choices"][0]["message"]["content"]
     else:
+        print(f"[OCR] Unexpected response format: {str(result)[:500]}")
         return str(result)
 
 
