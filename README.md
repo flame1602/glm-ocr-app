@@ -87,7 +87,6 @@ export DATA_DIR="./data"
 python app.py
 ```
 
-Mở http://localhost:8080, mật khẩu mặc định: `glm-ocr-2024`
 
 ## 📁 Cấu trúc
 
